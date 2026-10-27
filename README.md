@@ -21,6 +21,9 @@ pip install -e ".[dev]"
 
 cp .env.example .env             # 填入自己的 OpenAI key（之後的 LLM 功能用）
 streamlit run src/etfwatch/app.py
+
+# 沒網路或想展示時，用模擬價格：
+ETFWATCH_DEMO=1 streamlit run src/etfwatch/app.py
 ```
 
 ## 測試
@@ -47,6 +50,7 @@ src/etfwatch/
   market.py      價格來源介面 + Yahoo Finance 實作
   portfolio.py   損益、匯率換算、配置比例（純函式）
   indicators.py  報酬、均線、回撤、趨勢判斷（純函式）
+  service.py     串接儲存、行情與計算（網頁與 MCP 共用）
   app.py         Streamlit 網頁
 tests/           pytest 單元測試
 ```
