@@ -56,3 +56,26 @@ def fx_rates_to_twd(provider: PriceProvider, currencies: set[str]) -> dict[str, 
     if unknown:
         raise MarketDataError(f"不支援的幣別：{', '.join(sorted(unknown))}")
     return rates
+
+
+class DemoProvider:
+    """Deterministic synthetic prices for offline demos and UI tests.
+
+    Enabled by setting ETFWATCH_DEMO=1. Never use it for real decisions.
+    """
+
+    _BASE = {"TWD=X": 32.0}
+
+    def history(self, symbol: str, period: str = "6mo") -> pd.Series:
+        import numpy as np
+
+        days = {"5d": 5, "1mo": 21, "3mo": 63, "6mo": 126, "1y": 252}.get(period, 126)
+        seed = sum(ord(c) for c in symbol)
+        rng = np.random.default_rng(seed)
+        base = self._BASE.get(symbol, 50 + seed % 150)
+        is_fx = symbol == USD_TWD_SYMBOL
+        drift, vol = (0.0, 0.002) if is_fx else (0.0008, 0.015)
+        steps = rng.normal(drift, vol, size=days)
+        prices = base * np.exp(np.cumsum(steps))
+        idx = pd.bdate_range(end=pd.Timestamp("2026-10-27"), periods=days)
+        return pd.Series(prices.round(2), index=idx)
