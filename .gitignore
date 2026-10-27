@@ -1,0 +1,26 @@
+# 機密：API key 只放在本機 .env，絕不上傳
+.env
+.env.*
+!.env.example
+
+# 個人持股資料（本機 SQLite）
+data/*.db
+data/*.sqlite
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+.streamlit/secrets.toml

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "etfwatch"
+version = "0.1.0"
+description = "個人 ETF / 股票持股觀察站：損益、走勢指標與 LLM 簡報"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2.0",
+    "yfinance>=0.2.40",
+    "streamlit>=1.35",
+    "altair>=5.0",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-cov>=5.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
