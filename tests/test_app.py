@@ -52,3 +52,25 @@ def test_dashboard_renders_with_holdings(env):
     labels = [m.label for m in at.metric]
     assert "總市值" in labels and "美元匯率" in labels
     assert len(at.tabs) == 2
+
+
+def test_add_holding_with_total_cost(env):
+    at = run_app()
+    at.text_input[0].set_value("0050")
+    at.number_input[0].set_value(1945.0)
+    at.radio[0].set_value("總成本（券商 App 的付出成本）")
+    at.number_input[1].set_value(108714.0)
+    at.button[0].click().run()
+    assert not at.exception
+    store = HoldingStore(env)
+    [h] = store.list()
+    store.close()
+    assert h.avg_cost == pytest.approx(108714 / 1945)
+
+
+def test_warns_when_total_cost_entered_as_per_share(env):
+    s = HoldingStore(env)
+    s.add(Holding("0050", 1945, 108714))  # the mistake from the screenshot
+    s.close()
+    at = run_app()
+    assert any("總成本" in w.value for w in at.warning)

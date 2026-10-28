@@ -23,3 +23,21 @@ def test_fractional_us_shares():
 def test_invalid_holding(shares, cost):
     with pytest.raises(ValueError):
         Holding("0050", shares, cost)
+
+
+from etfwatch.models import COST_MODE_PER_SHARE, COST_MODE_TOTAL, to_avg_cost
+
+
+def test_to_avg_cost_per_share():
+    assert to_avg_cost(55.5, 1945, COST_MODE_PER_SHARE) == 55.5
+
+
+def test_to_avg_cost_from_total():
+    assert to_avg_cost(108714, 1945, COST_MODE_TOTAL) == pytest.approx(108714 / 1945)
+
+
+def test_to_avg_cost_errors():
+    with pytest.raises(ValueError):
+        to_avg_cost(100, 0, COST_MODE_TOTAL)
+    with pytest.raises(ValueError):
+        to_avg_cost(100, 1, "unknown")

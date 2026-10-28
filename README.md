@@ -14,17 +14,35 @@
 
 ## 安裝與執行
 
-```bash
+**Windows（PowerShell）**
+
+```powershell
 python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+.venv\Scripts\Activate.ps1     # 若出現「已停用指令碼執行」，先跑：Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 pip install -e ".[dev]"
 
-cp .env.example .env             # 填入自己的 OpenAI key（之後的 LLM 功能用）
+copy .env.example .env          # 填入自己的 OpenAI key（之後的 LLM 功能用）
 streamlit run src/etfwatch/app.py
 
 # 沒網路或想展示時，用模擬價格：
-ETFWATCH_DEMO=1 streamlit run src/etfwatch/app.py
+$env:ETFWATCH_DEMO="1"; streamlit run src/etfwatch/app.py
 ```
+
+**macOS / Linux**
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+cp .env.example .env
+streamlit run src/etfwatch/app.py
+ETFWATCH_DEMO=1 streamlit run src/etfwatch/app.py   # 模擬價格
+```
+
+### 輸入成本
+
+新增持股時可選「每股平均成本」或「總成本」。直接抄券商 App 的「付出成本」就選總成本，
+系統會自動除以股數。若平均成本高於現價 3 倍以上，頁面會提醒你可能填錯欄位。
 
 ## 測試
 

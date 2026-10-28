@@ -42,3 +42,19 @@ class Holding:
     def cost(self) -> float:
         """Total cost in the asset's own currency."""
         return self.shares * self.avg_cost
+
+
+COST_MODE_PER_SHARE = "每股平均成本"
+COST_MODE_TOTAL = "總成本（券商 App 的付出成本）"
+COST_MODES = (COST_MODE_PER_SHARE, COST_MODE_TOTAL)
+
+
+def to_avg_cost(amount: float, shares: float, mode: str) -> float:
+    """Convert what the user typed into a per-share average cost."""
+    if mode == COST_MODE_PER_SHARE:
+        return float(amount)
+    if mode == COST_MODE_TOTAL:
+        if shares <= 0:
+            raise ValueError("股數必須大於 0")
+        return float(amount) / float(shares)
+    raise ValueError(f"未知的成本輸入方式：{mode}")

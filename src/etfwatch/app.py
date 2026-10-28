@@ -14,7 +14,8 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from etfwatch.indicators import moving_average
-from etfwatch.models import Holding
+from etfwatch.models import COST_MODES, Holding, to_avg_cost
+from etfwatch.portfolio import cost_warning
 from etfwatch.service import default_provider, load_snapshot
 from etfwatch.storage import HoldingStore
 from etfwatch.symbols import display_code
@@ -57,17 +58,22 @@ with st.sidebar:
     with st.form("add_form", clear_on_submit=True):
         code = st.text_input("代號", placeholder="0050 或 NVDA")
         shares = st.number_input("股數", min_value=0.0, step=1.0, format="%.4f")
-        avg_cost = st.number_input("平均成本（原幣）", min_value=0.0, step=0.01, format="%.2f")
+        cost_mode = st.radio("成本輸入方式", COST_MODES)
+        cost_amount = st.number_input("成本金額（原幣）", min_value=0.0, step=0.01, format="%.2f")
         note = st.text_input("備註", placeholder="例如：定期定額")
         submitted = st.form_submit_button("新增", use_container_width=True)
     if submitted:
         try:
+            avg_cost = to_avg_cost(cost_amount, shares, cost_mode)
             h = store.add(Holding(code, shares, avg_cost, note))
-            st.success(f"已新增 {display_code(h.symbol)}")
+            st.success(f"已新增 {display_code(h.symbol)}，每股成本 {h.avg_cost:,.2f}")
             st.rerun()
         except ValueError as exc:
             st.error(str(exc))
-    st.caption("台股輸入代號即可（0050），美股輸入 ticker（NVDA）。成本以該商品原幣計。")
+    st.caption(
+        "台股輸入代號即可（0050），美股輸入 ticker（NVDA）。"
+        "成本以該商品原幣計；直接抄券商 App 的「付出成本」就選總成本。"
+    )
     if os.getenv("ETFWATCH_DEMO") == "1":
         st.warning("示範模式：價格為模擬資料")
 
@@ -85,6 +91,9 @@ with st.spinner("抓取價格中…"):
 
 for symbol, msg in snap.errors.items():
     st.warning(f"{display_code(symbol)}：{msg}")
+for p in snap.positions:
+    if (msg := cost_warning(p)) is not None:
+        st.warning(f"⚠️ {display_code(p.holding.symbol)}（#{p.holding.id}）：{msg}")
 
 s = snap.summary
 c1, c2, c3, c4 = st.columns(4)
@@ -144,14 +153,22 @@ with st.expander("編輯或刪除持股"):
     current = next(h for h in holdings if h.id == selected_id)
     with st.form("edit_form"):
         e_shares = st.number_input("股數", min_value=0.0, value=float(current.shares), format="%.4f")
-        e_cost = st.number_input("平均成本", min_value=0.0, value=float(current.avg_cost), format="%.2f")
+        e_mode = st.radio("成本輸入方式", COST_MODES, key="edit_mode", horizontal=True)
+        e_cost = st.number_input(
+            "成本金額（原幣）",
+            min_value=0.0,
+            value=float(current.avg_cost),
+            format="%.2f",
+            help=f"目前每股成本 {current.avg_cost:,.2f}，總成本 {current.cost:,.0f}",
+        )
         e_note = st.text_input("備註", value=current.note)
         col_a, col_b = st.columns(2)
         save = col_a.form_submit_button("儲存變更", use_container_width=True)
         remove = col_b.form_submit_button("刪除這筆", type="primary", use_container_width=True)
     if save:
         try:
-            store.update(Holding(current.symbol, e_shares, e_cost, e_note, id=current.id))
+            e_avg = to_avg_cost(e_cost, e_shares, e_mode)
+            store.update(Holding(current.symbol, e_shares, e_avg, e_note, id=current.id))
             st.rerun()
         except (ValueError, KeyError) as exc:
             st.error(str(exc))

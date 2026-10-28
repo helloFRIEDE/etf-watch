@@ -80,3 +80,20 @@ def summarize(positions: list[Position]) -> Summary:
         for p in positions:
             weights[p.holding.symbol] = weights.get(p.holding.symbol, 0.0) + p.value_twd / total_value
     return Summary(total_cost, total_value, weights)
+
+
+def cost_warning(position: Position, ratio: float = 3.0) -> str | None:
+    """Flag an average cost that is far above the current price.
+
+    The usual cause is typing the total cost into the per-share field, which
+    makes the loss look like -99%. Returns a message, or None if it looks fine.
+    """
+    avg = position.holding.avg_cost
+    if position.price <= 0 or avg <= position.price * ratio:
+        return None
+    implied = avg / position.holding.shares
+    return (
+        f"平均成本 {avg:,.2f} 是現價 {position.price:,.2f} 的 {avg / position.price:.0f} 倍。"
+        f"如果 {avg:,.0f} 其實是總成本，每股成本應為 {implied:,.2f}，"
+        "請到「編輯或刪除持股」修正。"
+    )

@@ -55,3 +55,22 @@ def test_empty_portfolio():
     assert s.total_value_twd == 0
     assert s.weights == {}
     assert s.pnl_pct is None
+
+
+from etfwatch.portfolio import cost_warning
+
+
+def test_cost_warning_catches_total_typed_as_per_share():
+    # Regression: user typed total cost 108,714 into the per-share field.
+    [p] = build_positions([Holding("0050", 1945, 108714)], {"0050.TW": 108.65}, FX)
+    msg = cost_warning(p)
+    assert msg is not None
+    assert "55.89" in msg  # suggests the corrected per-share cost
+
+
+def test_cost_warning_quiet_for_normal_cost():
+    [p] = build_positions([Holding("0050", 1945, 55.89)], {"0050.TW": 108.65}, FX)
+    assert cost_warning(p) is None
+    # a real loss of up to 2/3 is not flagged
+    [p] = build_positions([Holding("NVDA", 1, 300)], {"NVDA": 120}, FX)
+    assert cost_warning(p) is None
