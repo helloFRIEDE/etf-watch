@@ -148,10 +148,17 @@ def explain_openai_error(exc: Exception, model: str) -> str:
         )
     elif "RateLimitError" in names:
         hint = "呼叫太頻繁，被暫時限流。請等一分鐘再試。"
-    elif "NotFoundError" in names or "model_not_found" in detail or "DeploymentNotFound" in detail:
+    elif "DeploymentNotFound" in detail or "model_not_found" in detail:
         hint = (
             f"找不到模型或部署「{model}」。OpenAI 請改 OPENAI_MODEL；"
             "Azure 請確認 AZURE_OPENAI_DEPLOYMENT 和 Azure 入口網站「部署」頁面上的名稱完全一致。"
+        )
+    elif "NotFoundError" in names:
+        hint = (
+            f"API 路徑不存在（部署「{model}」）。Azure 常見原因："
+            "① AZURE_OPENAI_API_VERSION 太舊、不支援這個模型，請改成 v1；"
+            "② 端點不是「金鑰與端點」頁面上的 https://<資源名稱>.openai.azure.com 或 "
+            ".cognitiveservices.azure.com 網址；③ 部署名稱與入口網站不一致。"
         )
     elif "PermissionDeniedError" in names:
         hint = "這個 key 沒有權限呼叫此 API（可能是專案權限或地區限制），請到 OpenAI 後台檢查 key 的權限設定。"
@@ -190,7 +197,10 @@ class OpenAIClient:
         return text
 
 
-AZURE_DEFAULT_API_VERSION = "2024-10-21"
+# "v1" = Azure's version-less v1 API (/openai/v1/), which supports the newest
+# models such as gpt-5.x. Any other value (e.g. "2024-10-21") uses the legacy
+# /openai/deployments/{name}?api-version=... route.
+AZURE_DEFAULT_API_VERSION = "v1"
 
 
 def normalize_azure_endpoint(raw: str) -> str:
@@ -214,7 +224,7 @@ def normalize_azure_endpoint(raw: str) -> str:
 
 
 class AzureOpenAIClient(OpenAIClient):
-    """Azure OpenAI: needs endpoint, key, deployment name and API version.
+    """Azure OpenAI: endpoint, key and deployment name (+ optional API version).
 
     On Azure the `model` argument is the *deployment name* you created in the
     portal, which may differ from the underlying model name.
@@ -228,18 +238,26 @@ class AzureOpenAIClient(OpenAIClient):
         api_version: str = AZURE_DEFAULT_API_VERSION,
         timeout: float = 60.0,
     ) -> None:
-        from openai import AzureOpenAI
-
         if not deployment.strip():
             raise ValueError("請在 .env 設定 AZURE_OPENAI_DEPLOYMENT（Azure 上的部署名稱）")
         self.model = deployment.strip()
         self.endpoint = normalize_azure_endpoint(endpoint)
-        self._client = AzureOpenAI(
-            azure_endpoint=self.endpoint,
-            api_key=api_key.strip(),
-            api_version=api_version.strip() or AZURE_DEFAULT_API_VERSION,
-            timeout=timeout,
-        )
+        self.api_version = (api_version or "").strip() or AZURE_DEFAULT_API_VERSION
+        if self.api_version.lower() == "v1":
+            from openai import OpenAI
+
+            self.base_url = self.endpoint + "openai/v1/"
+            self._client = OpenAI(base_url=self.base_url, api_key=api_key.strip(), timeout=timeout)
+        else:
+            from openai import AzureOpenAI
+
+            self.base_url = self.endpoint
+            self._client = AzureOpenAI(
+                azure_endpoint=self.endpoint,
+                api_key=api_key.strip(),
+                api_version=self.api_version,
+                timeout=timeout,
+            )
 
 
 class DemoLLM:

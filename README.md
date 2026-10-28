@@ -56,10 +56,11 @@ ETFWATCH_DEMO=1 streamlit run src/etfwatch/app.py   # 模擬價格
 AZURE_OPENAI_ENDPOINT=https://<你的資源名稱>.openai.azure.com/
 AZURE_OPENAI_API_KEY=<金鑰與端點頁面上的 KEY 1>
 AZURE_OPENAI_DEPLOYMENT=<部署名稱>
-AZURE_OPENAI_API_VERSION=2024-10-21
+AZURE_OPENAI_API_VERSION=v1
 ```
 
 端點貼入口網站的完整「目標 URI」也可以，程式會自動只取網域部分。
+`v1` 是 Azure 的新版 API（`/openai/v1/`），支援 gpt-5.x 等新模型；填日期版本（如 `2024-10-21`）則走舊路徑。
 使用 OpenAI 官方則只要填 `OPENAI_API_KEY`（與選填的 `OPENAI_MODEL`）。
 
 ### 輸入成本

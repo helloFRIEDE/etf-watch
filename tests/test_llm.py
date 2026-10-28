@@ -154,7 +154,8 @@ def _err(name, msg=""):
         (_err("AuthenticationError", "Incorrect API key provided"), "API key 無效"),
         (_err("RateLimitError", "Error code: 429 - insufficient_quota"), "沒有 API 額度"),
         (_err("RateLimitError", "Rate limit reached"), "限流"),
-        (_err("NotFoundError", "The model does not exist"), "OPENAI_MODEL"),
+        (_err("NotFoundError", "model_not_found: The model does not exist"), "OPENAI_MODEL"),
+        (_err("NotFoundError", "Error code: 404 - Resource not found"), "改成 v1"),
         (_err("PermissionDeniedError", "forbidden"), "權限"),
         (_err("APITimeoutError"), "逾時"),
         (_err("APIConnectionError", "Connection error."), "連不到 OpenAI"),
@@ -238,3 +239,25 @@ def test_no_temperature_sent():
     comp = _Completions(content="ok")
     _client_with(comp).complete("S", "U")
     assert "temperature" not in comp.kwargs
+
+
+def test_azure_v1_is_default(monkeypatch):
+    monkeypatch.delenv("AZURE_OPENAI_API_VERSION", raising=False)
+    c = AzureOpenAIClient("https://amy-ai.openai.azure.com", "k", "gpt-5.1")
+    assert c.api_version == "v1"
+    assert c.base_url == "https://amy-ai.openai.azure.com/openai/v1/"
+    assert str(c._client.base_url).rstrip("/") == "https://amy-ai.openai.azure.com/openai/v1"
+
+
+@pytest.mark.parametrize("version", ["", "  ", "V1"])
+def test_azure_blank_or_uppercase_version_means_v1(version):
+    c = AzureOpenAIClient("https://a.openai.azure.com", "k", "d", api_version=version)
+    assert c.base_url.endswith("/openai/v1/")
+
+
+def test_azure_legacy_api_version():
+    from openai import AzureOpenAI
+
+    c = AzureOpenAIClient("https://a.openai.azure.com", "k", "d", api_version="2024-10-21")
+    assert isinstance(c._client, AzureOpenAI)
+    assert c.api_version == "2024-10-21"
