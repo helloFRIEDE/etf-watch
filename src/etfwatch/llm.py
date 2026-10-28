@@ -128,6 +128,39 @@ def answer_question(client: LLMClient, context: str, question: str) -> str:
     return client.complete(SYSTEM_PROMPT, user)
 
 
+def explain_openai_error(exc: Exception, model: str) -> str:
+    """Turn an OpenAI SDK exception into a Chinese message that says what to fix.
+
+    Matches on class names in the MRO so it works across SDK versions and is
+    testable without constructing real SDK exceptions.
+    """
+    names = {cls.__name__ for cls in type(exc).__mro__}
+    detail = str(exc)
+    if "AuthenticationError" in names:
+        hint = (
+            "API key 無效。請確認 .env 裡的 OPENAI_API_KEY 完整複製、沒有引號或多餘空白，"
+            "且該 key 沒被刪除；改完要重新啟動 streamlit。"
+        )
+    elif "RateLimitError" in names and "insufficient_quota" in detail:
+        hint = (
+            "帳戶沒有 API 額度。ChatGPT Plus 訂閱不包含 API 費用，"
+            "需要到 platform.openai.com 的 Billing 頁面儲值（最低 5 美元）。"
+        )
+    elif "RateLimitError" in names:
+        hint = "呼叫太頻繁，被暫時限流。請等一分鐘再試。"
+    elif "NotFoundError" in names or "model_not_found" in detail:
+        hint = f"帳戶無法使用模型「{model}」。請在 .env 把 OPENAI_MODEL 改成你帳戶可用的模型後重新啟動。"
+    elif "PermissionDeniedError" in names:
+        hint = "這個 key 沒有權限呼叫此 API（可能是專案權限或地區限制），請到 OpenAI 後台檢查 key 的權限設定。"
+    elif "APITimeoutError" in names:
+        hint = "連線逾時，請稍後再試。"
+    elif "APIConnectionError" in names:
+        hint = "連不到 OpenAI。請確認網路正常；學校或公司網路可能擋掉 api.openai.com，可改用手機熱點試試。"
+    else:
+        hint = "未預期的錯誤。"
+    return f"OpenAI 呼叫失敗：{hint}\n\n原始訊息：{detail}"
+
+
 class OpenAIClient:
     """Calls the OpenAI Chat Completions API. Key comes from OPENAI_API_KEY."""
 
@@ -148,7 +181,7 @@ class OpenAIClient:
                 temperature=0.3,
             )
         except Exception as exc:  # auth, quota, network …
-            raise LLMError(f"OpenAI 呼叫失敗：{exc}") from exc
+            raise LLMError(explain_openai_error(exc, self.model)) from exc
         text = (resp.choices[0].message.content or "").strip()
         if not text:
             raise LLMError("模型沒有回傳內容")

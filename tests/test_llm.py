@@ -137,3 +137,43 @@ def test_openai_client_success():
 def test_openai_client_errors(comp):
     with pytest.raises(LLMError):
         _client_with(comp).complete("S", "U")
+
+
+# --- friendly error messages ---
+from etfwatch.llm import explain_openai_error
+
+
+def _err(name, msg=""):
+    return type(name, (Exception,), {})(msg)
+
+
+@pytest.mark.parametrize(
+    "exc, expected",
+    [
+        (_err("AuthenticationError", "Incorrect API key provided"), "API key 無效"),
+        (_err("RateLimitError", "Error code: 429 - insufficient_quota"), "沒有 API 額度"),
+        (_err("RateLimitError", "Rate limit reached"), "限流"),
+        (_err("NotFoundError", "The model does not exist"), "OPENAI_MODEL"),
+        (_err("PermissionDeniedError", "forbidden"), "權限"),
+        (_err("APITimeoutError"), "逾時"),
+        (_err("APIConnectionError", "Connection error."), "連不到 OpenAI"),
+        (ValueError("weird"), "未預期"),
+    ],
+)
+def test_explain_openai_error(exc, expected):
+    msg = explain_openai_error(exc, "gpt-test")
+    assert expected in msg
+    assert str(exc) in msg  # original text kept for debugging
+
+
+def test_timeout_subclass_of_connection_error_reports_timeout():
+    # In the SDK, APITimeoutError subclasses APIConnectionError.
+    conn = type("APIConnectionError", (Exception,), {})
+    timeout = type("APITimeoutError", (conn,), {})
+    assert "逾時" in explain_openai_error(timeout("t"), "m")
+
+
+def test_client_wraps_sdk_error_with_hint():
+    comp = _Completions(exc=_err("AuthenticationError", "401"))
+    with pytest.raises(LLMError, match="API key 無效"):
+        _client_with(comp).complete("S", "U")
