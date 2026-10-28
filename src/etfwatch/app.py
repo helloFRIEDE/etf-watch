@@ -14,7 +14,9 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from etfwatch.indicators import moving_average
+from etfwatch.llm import LLMError, answer_question, build_context, default_llm, generate_briefing
 from etfwatch.models import COST_MODES, Holding, to_avg_cost
+from etfwatch.news import DemoNewsProvider, GoogleNewsProvider, NewsItem, collect_news
 from etfwatch.portfolio import cost_warning
 from etfwatch.service import default_provider, load_snapshot
 from etfwatch.storage import HoldingStore
@@ -40,6 +42,12 @@ class CachedProvider:
 
     def history(self, symbol: str, period: str = "6mo") -> pd.Series:
         return cached_history(symbol, period, os.getenv("ETFWATCH_DEMO") == "1")
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def cached_news(symbols: tuple[str, ...], demo: bool) -> tuple[dict[str, list[NewsItem]], dict[str, str]]:
+    provider = DemoNewsProvider() if demo else GoogleNewsProvider()
+    return collect_news(provider, list(symbols), limit=5)
 
 
 def fmt_twd(x: float) -> str:
@@ -102,6 +110,59 @@ c2.metric("總成本", fmt_twd(s.total_cost_twd))
 c3.metric("未實現損益", fmt_twd(s.pnl_twd), fmt_pct(s.pnl_pct))
 if "USD" in snap.fx_to_twd:
     c4.metric("美元匯率", f"{snap.fx_to_twd['USD']:.3f}")
+
+# ---------------- AI briefing & Q&A ----------------
+st.subheader("🤖 AI 持股簡報")
+llm = default_llm()
+if llm is None:
+    st.info(
+        "尚未設定 OpenAI API key。把 `.env.example` 複製成 `.env`，填入 `OPENAI_API_KEY` 後重新啟動，"
+        "就能產生 AI 簡報。（`.env` 不會被上傳到 GitHub）"
+    )
+else:
+    demo = os.getenv("ETFWATCH_DEMO") == "1"
+    news_symbols = tuple(dict.fromkeys(p.holding.symbol for p in snap.positions))
+
+    def current_context() -> str:
+        news, news_errors = cached_news(news_symbols, demo)
+        for symbol, msg in news_errors.items():
+            st.caption(f"{display_code(symbol)} 新聞取得失敗：{msg}")
+        return build_context(snap, news)
+
+    brief_tab, ask_tab = st.tabs(["本週簡報", "問問 AI"])
+    with brief_tab:
+        latest = store.latest_briefing()
+        if st.button("產生新簡報", type="primary"):
+            with st.spinner("AI 正在閱讀你的持股與新聞…"):
+                try:
+                    store.save_briefing(generate_briefing(llm, current_context()))
+                    latest = store.latest_briefing()
+                except LLMError as exc:
+                    st.error(str(exc))
+        if latest:
+            created_at, content = latest
+            st.caption(f"產生時間：{created_at:%Y-%m-%d %H:%M}（重新整理頁面不會重新呼叫 API）")
+            st.markdown(content)
+        else:
+            st.caption("還沒有簡報，按上面的按鈕產生第一份。")
+    with ask_tab:
+        with st.form("ask_form"):
+            question = st.text_input("問題", placeholder="例如：我的 0050 最近表現如何？輝達占我的組合多少？")
+            asked = st.form_submit_button("送出")
+        if asked:
+            with st.spinner("思考中…"):
+                try:
+                    st.session_state["last_answer"] = (
+                        question,
+                        answer_question(llm, current_context(), question),
+                    )
+                except (LLMError, ValueError) as exc:
+                    st.error(str(exc))
+        if "last_answer" in st.session_state:
+            q, a = st.session_state["last_answer"]
+            st.markdown(f"**你問：** {q}")
+            st.markdown(a)
+    st.caption("AI 只根據上方計算出的數字與近 7 日新聞標題整理，可能有誤，不構成投資建議。")
 
 # ---------------- Holdings table + allocation ----------------
 left, right = st.columns([3, 2])
