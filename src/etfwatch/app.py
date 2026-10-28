@@ -113,11 +113,15 @@ if "USD" in snap.fx_to_twd:
 
 # ---------------- AI briefing & Q&A ----------------
 st.subheader("🤖 AI 持股簡報")
-llm = default_llm()
+try:
+    llm = default_llm()
+except ValueError as exc:  # e.g. Azure endpoint set but deployment missing
+    st.error(f"LLM 設定有誤：{exc}")
+    llm = None
 if llm is None:
     st.info(
-        "尚未設定 OpenAI API key。把 `.env.example` 複製成 `.env`，填入 `OPENAI_API_KEY` 後重新啟動，"
-        "就能產生 AI 簡報。（`.env` 不會被上傳到 GitHub）"
+        "尚未設定 LLM。把 `.env.example` 複製成 `.env`，填入 Azure OpenAI（`AZURE_OPENAI_*`）"
+        "或 OpenAI（`OPENAI_API_KEY`）的設定後重新啟動，就能產生 AI 簡報。（`.env` 不會被上傳到 GitHub）"
     )
 else:
     demo = os.getenv("ETFWATCH_DEMO") == "1"

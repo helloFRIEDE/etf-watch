@@ -89,6 +89,7 @@ def test_answer_question_validates(q):
 
 
 def test_default_llm(monkeypatch):
+    monkeypatch.delenv("AZURE_OPENAI_ENDPOINT", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("ETFWATCH_DEMO", raising=False)
     assert default_llm() is None
@@ -177,3 +178,63 @@ def test_client_wraps_sdk_error_with_hint():
     comp = _Completions(exc=_err("AuthenticationError", "401"))
     with pytest.raises(LLMError, match="API key 無效"):
         _client_with(comp).complete("S", "U")
+
+
+# --- Azure OpenAI ---
+from etfwatch.llm import AzureOpenAIClient, normalize_azure_endpoint
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("https://amy-ai.openai.azure.com/", "https://amy-ai.openai.azure.com/"),
+        ("https://amy-ai.openai.azure.com", "https://amy-ai.openai.azure.com/"),
+        (
+            "https://amy-ai.openai.azure.com/openai/deployments/gpt-4o/chat/completions"
+            "?api-version=2024-10-21",
+            "https://amy-ai.openai.azure.com/",
+        ),
+        ('"https://amy-ai.cognitiveservices.azure.com/"', "https://amy-ai.cognitiveservices.azure.com/"),
+        ("amy-ai.openai.azure.com", "https://amy-ai.openai.azure.com/"),
+    ],
+)
+def test_normalize_azure_endpoint(raw, expected):
+    assert normalize_azure_endpoint(raw) == expected
+
+
+@pytest.mark.parametrize("raw", ["", "   ", "https://"])
+def test_normalize_azure_endpoint_rejects_empty(raw):
+    with pytest.raises(ValueError):
+        normalize_azure_endpoint(raw)
+
+
+def test_default_llm_prefers_azure(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-123")
+    monkeypatch.setenv(
+        "AZURE_OPENAI_ENDPOINT",
+        "https://amy-ai.openai.azure.com/openai/deployments/x/chat/completions?api-version=1",
+    )
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "azure-key")
+    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "my-gpt4o")
+    monkeypatch.delenv("AZURE_OPENAI_API_VERSION", raising=False)
+    client = default_llm()
+    assert isinstance(client, AzureOpenAIClient)
+    assert client.model == "my-gpt4o"
+    assert client.endpoint == "https://amy-ai.openai.azure.com/"
+
+
+def test_azure_requires_deployment():
+    with pytest.raises(ValueError, match="AZURE_OPENAI_DEPLOYMENT"):
+        AzureOpenAIClient("https://a.openai.azure.com", "k", deployment=" ")
+
+
+def test_azure_deployment_not_found_hint():
+    msg = explain_openai_error(_err("NotFoundError", "DeploymentNotFound"), "my-gpt4o")
+    assert "AZURE_OPENAI_DEPLOYMENT" in msg and "my-gpt4o" in msg
+
+
+def test_no_temperature_sent():
+    # reasoning models (o-series / gpt-5) reject a custom temperature
+    comp = _Completions(content="ok")
+    _client_with(comp).complete("S", "U")
+    assert "temperature" not in comp.kwargs

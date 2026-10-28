@@ -19,6 +19,7 @@ def env(tmp_path, monkeypatch):
     # An empty value stops load_dotenv() from reading a real key out of .env,
     # so running the tests never calls (or bills) the OpenAI API.
     monkeypatch.setenv("OPENAI_API_KEY", "")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "")
     return db
 
 

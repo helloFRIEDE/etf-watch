@@ -48,6 +48,20 @@ streamlit run src/etfwatch/app.py
 ETFWATCH_DEMO=1 streamlit run src/etfwatch/app.py   # 模擬價格
 ```
 
+### 設定 LLM（Azure OpenAI 或 OpenAI）
+
+編輯 `.env`。使用 **Azure OpenAI** 時填這四個（有填 `AZURE_OPENAI_ENDPOINT` 就會優先使用 Azure）：
+
+```
+AZURE_OPENAI_ENDPOINT=https://<你的資源名稱>.openai.azure.com/
+AZURE_OPENAI_API_KEY=<金鑰與端點頁面上的 KEY 1>
+AZURE_OPENAI_DEPLOYMENT=<部署名稱>
+AZURE_OPENAI_API_VERSION=2024-10-21
+```
+
+端點貼入口網站的完整「目標 URI」也可以，程式會自動只取網域部分。
+使用 OpenAI 官方則只要填 `OPENAI_API_KEY`（與選填的 `OPENAI_MODEL`）。
+
 ### 輸入成本
 
 新增持股時可選「每股平均成本」或「總成本」。直接抄券商 App 的「付出成本」就選總成本，

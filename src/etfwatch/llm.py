@@ -138,8 +138,8 @@ def explain_openai_error(exc: Exception, model: str) -> str:
     detail = str(exc)
     if "AuthenticationError" in names:
         hint = (
-            "API key 無效。請確認 .env 裡的 OPENAI_API_KEY 完整複製、沒有引號或多餘空白，"
-            "且該 key 沒被刪除；改完要重新啟動 streamlit。"
+            "API key 無效。請確認 key 完整複製、沒有引號或多餘空白，改完要重新啟動 streamlit。"
+            "若用 Azure：key 要填在 AZURE_OPENAI_API_KEY，且必須和 AZURE_OPENAI_ENDPOINT 是同一個資源。"
         )
     elif "RateLimitError" in names and "insufficient_quota" in detail:
         hint = (
@@ -148,8 +148,11 @@ def explain_openai_error(exc: Exception, model: str) -> str:
         )
     elif "RateLimitError" in names:
         hint = "呼叫太頻繁，被暫時限流。請等一分鐘再試。"
-    elif "NotFoundError" in names or "model_not_found" in detail:
-        hint = f"帳戶無法使用模型「{model}」。請在 .env 把 OPENAI_MODEL 改成你帳戶可用的模型後重新啟動。"
+    elif "NotFoundError" in names or "model_not_found" in detail or "DeploymentNotFound" in detail:
+        hint = (
+            f"找不到模型或部署「{model}」。OpenAI 請改 OPENAI_MODEL；"
+            "Azure 請確認 AZURE_OPENAI_DEPLOYMENT 和 Azure 入口網站「部署」頁面上的名稱完全一致。"
+        )
     elif "PermissionDeniedError" in names:
         hint = "這個 key 沒有權限呼叫此 API（可能是專案權限或地區限制），請到 OpenAI 後台檢查 key 的權限設定。"
     elif "APITimeoutError" in names:
@@ -178,7 +181,6 @@ class OpenAIClient:
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
                 ],
-                temperature=0.3,
             )
         except Exception as exc:  # auth, quota, network …
             raise LLMError(explain_openai_error(exc, self.model)) from exc
@@ -186,6 +188,58 @@ class OpenAIClient:
         if not text:
             raise LLMError("模型沒有回傳內容")
         return text
+
+
+AZURE_DEFAULT_API_VERSION = "2024-10-21"
+
+
+def normalize_azure_endpoint(raw: str) -> str:
+    """Keep only scheme + host of an Azure endpoint.
+
+    People often paste the full "Target URI" from the Azure portal, e.g.
+    https://x.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=...
+    while the SDK wants just https://x.openai.azure.com/
+    """
+    from urllib.parse import urlparse
+
+    raw = (raw or "").strip().strip('"').strip("'")
+    if not raw:
+        raise ValueError("AZURE_OPENAI_ENDPOINT 不可為空")
+    if "://" not in raw:
+        raw = "https://" + raw
+    parsed = urlparse(raw)
+    if not parsed.netloc:
+        raise ValueError(f"無法辨識的 Azure 端點：{raw}")
+    return f"{parsed.scheme}://{parsed.netloc}/"
+
+
+class AzureOpenAIClient(OpenAIClient):
+    """Azure OpenAI: needs endpoint, key, deployment name and API version.
+
+    On Azure the `model` argument is the *deployment name* you created in the
+    portal, which may differ from the underlying model name.
+    """
+
+    def __init__(
+        self,
+        endpoint: str,
+        api_key: str,
+        deployment: str,
+        api_version: str = AZURE_DEFAULT_API_VERSION,
+        timeout: float = 60.0,
+    ) -> None:
+        from openai import AzureOpenAI
+
+        if not deployment.strip():
+            raise ValueError("請在 .env 設定 AZURE_OPENAI_DEPLOYMENT（Azure 上的部署名稱）")
+        self.model = deployment.strip()
+        self.endpoint = normalize_azure_endpoint(endpoint)
+        self._client = AzureOpenAI(
+            azure_endpoint=self.endpoint,
+            api_key=api_key.strip(),
+            api_version=api_version.strip() or AZURE_DEFAULT_API_VERSION,
+            timeout=timeout,
+        )
 
 
 class DemoLLM:
@@ -196,7 +250,16 @@ class DemoLLM:
 
 
 def default_llm() -> LLMClient | None:
-    """OpenAI client if a key is configured; demo stub in demo mode; else None."""
+    """Azure OpenAI if AZURE_OPENAI_ENDPOINT is set, else OpenAI if a key is set;
+    demo stub in demo mode; otherwise None."""
+    azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").strip()
+    if azure_endpoint:
+        return AzureOpenAIClient(
+            endpoint=azure_endpoint,
+            api_key=os.getenv("AZURE_OPENAI_API_KEY", ""),
+            deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT", ""),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", AZURE_DEFAULT_API_VERSION),
+        )
     key = os.getenv("OPENAI_API_KEY", "").strip()
     if key and not key.startswith("sk-your"):
         return OpenAIClient(key, os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
