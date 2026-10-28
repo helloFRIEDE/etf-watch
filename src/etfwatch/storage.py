@@ -8,6 +8,23 @@ from pathlib import Path
 
 from .models import Holding
 
+# src/etfwatch/storage.py -> project root
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def default_db_path() -> Path:
+    """Database location shared by the web app and the MCP server.
+
+    ETFWATCH_DB may be absolute or relative; relative paths are resolved
+    against the project root (not the current directory), because MCP
+    clients such as Claude Desktop start the server from another folder.
+    """
+    import os
+
+    raw = os.getenv("ETFWATCH_DB", "").strip() or "data/portfolio.db"
+    path = Path(raw).expanduser()
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS holdings (
     id       INTEGER PRIMARY KEY AUTOINCREMENT,

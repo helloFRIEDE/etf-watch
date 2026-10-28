@@ -19,7 +19,7 @@ from etfwatch.models import COST_MODES, Holding, to_avg_cost
 from etfwatch.news import DemoNewsProvider, GoogleNewsProvider, NewsItem, collect_news
 from etfwatch.portfolio import cost_warning
 from etfwatch.service import default_provider, load_snapshot
-from etfwatch.storage import HoldingStore
+from etfwatch.storage import HoldingStore, default_db_path
 from etfwatch.symbols import display_code
 
 load_dotenv()
@@ -58,7 +58,7 @@ def fmt_pct(x: float | None) -> str:
     return "—" if x is None else f"{x:+.2%}"
 
 
-store = get_store(os.getenv("ETFWATCH_DB", "data/portfolio.db"))
+store = get_store(str(default_db_path()))
 
 # ---------------- Sidebar: add holding ----------------
 with st.sidebar:
