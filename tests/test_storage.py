@@ -58,3 +58,15 @@ def test_persists_to_file(tmp_path):
     s2 = HoldingStore(db)
     assert [h.symbol for h in s2.list()] == ["0050.TW"]
     s2.close()
+
+
+from datetime import datetime
+
+
+def test_briefings(store):
+    assert store.latest_briefing() is None
+    store.save_briefing("舊的", datetime(2026, 10, 20, 9, 0))
+    store.save_briefing("新的", datetime(2026, 10, 27, 9, 0))
+    when, content = store.latest_briefing()
+    assert content == "新的"
+    assert when == datetime(2026, 10, 27, 9, 0)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 from .models import Holding
@@ -14,6 +15,11 @@ CREATE TABLE IF NOT EXISTS holdings (
     shares   REAL NOT NULL,
     avg_cost REAL NOT NULL,
     note     TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS briefings (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    content    TEXT NOT NULL
 );
 """
 
@@ -27,7 +33,7 @@ class HoldingStore:
             Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
-        self._conn.execute(_SCHEMA)
+        self._conn.executescript(_SCHEMA)
         self._conn.commit()
 
     def close(self) -> None:
@@ -78,3 +84,20 @@ class HoldingStore:
         self._conn.commit()
         if cur.rowcount == 0:
             raise KeyError(f"找不到持股 id={holding_id}")
+
+    # ---- LLM briefings: saved so reloading the page doesn't call the API again ----
+
+    def save_briefing(self, content: str, created_at: datetime | None = None) -> None:
+        ts = (created_at or datetime.now()).isoformat(timespec="seconds")
+        self._conn.execute(
+            "INSERT INTO briefings (created_at, content) VALUES (?, ?)", (ts, content)
+        )
+        self._conn.commit()
+
+    def latest_briefing(self) -> tuple[datetime, str] | None:
+        row = self._conn.execute(
+            "SELECT created_at, content FROM briefings ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if row is None:
+            return None
+        return datetime.fromisoformat(row["created_at"]), row["content"]
