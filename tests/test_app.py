@@ -63,7 +63,7 @@ def test_add_holding_with_total_cost(env):
     at = run_app()
     at.text_input[0].set_value("0050")
     at.number_input[0].set_value(1945.0)
-    at.radio[0].set_value("總成本（券商 App 的付出成本）")
+    at.radio[0].set_value("總成本")
     at.number_input[1].set_value(108714.0)
     at.button[0].click().run()
     assert not at.exception

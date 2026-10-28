@@ -45,7 +45,7 @@ class Holding:
 
 
 COST_MODE_PER_SHARE = "每股平均成本"
-COST_MODE_TOTAL = "總成本（券商 App 的付出成本）"
+COST_MODE_TOTAL = "總成本"
 COST_MODES = (COST_MODE_PER_SHARE, COST_MODE_TOTAL)
 
 
